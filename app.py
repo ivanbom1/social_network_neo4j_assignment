@@ -25,10 +25,9 @@ class Database:
     
     # User operations
     def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, name) VALUES (?, ?)', (username, name))
-            return cursor.lastrowid
+        with self.driver.session() as session:
+            session.run( "CREATE (u:User {username: $username, name: $name})",
+                         username=username, name=name)
     
     def get_user(self, user_id: int) -> Optional[dict]:
         with self._get_connection() as conn:
