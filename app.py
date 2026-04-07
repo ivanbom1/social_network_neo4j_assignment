@@ -50,16 +50,16 @@ class Database:
         with self.driver.session() as session:
             session.run(
                 "MATCH (u:User {id: $user_id}) CREATE (u)-[:POSTED]->(p:Post {id: $id, user_id: $user_id, content: $content})",
-                user_id=user_id, id=post_id, content=content
-            )
+                user_id=user_id, id=post_id, content=content)
+            
         return post_id  
                 
     def get_posts_by_user(self, user_id: int) -> List[dict]:
         with self.driver.session() as session:
             result = session.run(
                 "MATCH (u:User {id: $user_id})-[:POSTED]->(p:Post) RETURN p ORDER BY p.id DESC",
-                user_id=user_id
-            )
+                user_id=user_id)
+            
             records = list(result)
             return [{'id': record['p']['id'], 'content': record['p']['content']} for record in records]
     
@@ -84,42 +84,39 @@ class Database:
     
     # Follow operations
     def follow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            try:
-                conn.execute('INSERT INTO followers (follower_id, followee_id) VALUES (?, ?)', 
-                           (follower_id, followee_id))
+        with self.session() as session:
+            result = session.run("MATCH (user1:User {id: $follower_id}), (user2:User {id: $followee_id}) CREATE (user1)-[:FOLLOWS]->(user2)",
+                                 follower_id=follower_id, followee_id=followee_id)
+            if result:
                 return True
-            except sqlite3.IntegrityError:
-                return False
-    
+            return False
+                
     def get_followers(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.follower_id = u.id
-                WHERE f.followee_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (follower:User)-[:FOLLOWS]->(u:User {id: $user_id}) RETURN follower.id, follower.username, follower.name",
+                user_id=user_id)
+            
+            records = list(result)
+            return [{'id': record['follower.id'], 'username': record['follower.username'], 'name': record['follower.name']} for record in records]
+
     
     def get_following(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.followee_id = u.id
-                WHERE f.follower_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (u:User {id: $user_id})-[:FOLLOWS]->(following:User) RETURN following.id, following.username, following.name",
+                user_id=user_id)
+            
+            records = list(result)
+            return [{'id': record['following.id'], 'username': record['following.username'], 'name': record['following.name']} for record in records]
 
     def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM followers WHERE follower_id = ? AND followee_id = ?', 
-                        (follower_id, followee_id))
-            return cursor.rowcount > 0
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (a:User {id: $follower})-[r:FOLLOWS]->(b:User {id: $followee}) DELETE r RETURN count(r) as deleted",
+                follower=follower_id, followee=followee_id)
+            
+            return result.single()['deleted'] > 0
 
 # ======================
 # Web Application
