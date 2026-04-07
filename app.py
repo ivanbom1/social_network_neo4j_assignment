@@ -24,17 +24,14 @@ class Database:
         self.driver.close()
     
     # User operations
-    def create_user(self, username: str, name: str) -> int:
+    def create_user(self, user_id: int, username: str, name: str) -> int:
         with self.driver.session() as session:
-            session.run( "CREATE (u:User {username: $username, name: $name})",
-                         username=username, name=name)
+            session.run( "CREATE (u:User {id: $id, username: $username, name: $name})",
+                         id = user_id, username=username, name=name)
     
     def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users WHERE id = ?', (user_id,))
-            row = cursor.fetchone()
-            return {'id': row[0], 'username': row[1], 'name': row[2]} if row else None
+        with self.driver.session() as session:
+            session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
     
     def get_all_users(self) -> List[dict]:
         with self._get_connection() as conn:
