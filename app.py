@@ -28,16 +28,22 @@ class Database:
         with self.driver.session() as session:
             session.run( "CREATE (u:User {id: $id, username: $username, name: $name})",
                          id = user_id, username=username, name=name)
+        return user_id
     
     def get_user(self, user_id: int) -> Optional[dict]:
         with self.driver.session() as session:
-            session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+            result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+            record = result.single()
+            if record:
+                user = record['u']
+                return {'id': user['id'], 'username': user['username'], 'name': user['name']}
+            return None
     
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users')
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        with self.driver.session() as session:
+            result = session.run("MATCH (u:User) RETURN u")
+            records = list(result)
+            return [{'id': record['u']['id'], 'username': record['u']['username'], 'name': record['u']['name']} for record in records]
     
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
